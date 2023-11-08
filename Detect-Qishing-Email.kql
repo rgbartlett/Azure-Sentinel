@@ -1,0 +1,9 @@
+// Build list of recipients we've previously sent email to exclusing auto-replies
+let PreviouslySentTo = (EmailEvents
+| where Timestamp between (ago(180d)..ago(4h)) and EmailDirection == "Outbound" and Subject !startswith "Automatic reply:"
+| distinct RecipientEmailAddress);
+// Detect delivered inbound emails with no Url, 1 or more attachments from addresses we've not sent email to in the last 180 days with a known file name pattern
+EmailEvents
+| where Timestamp > ago(4h) and EmailDirection == "Inbound" and DeliveryAction == "Delivered"  and UrlCount == "0" and AttachmentCount > 0 and SenderFromAddress !in~ (PreviouslySentTo)
+| join kind=innerunique (EmailAttachmentInfo | where (FileName matches regex '[A-Z]{10}\\.png' or FileName matches regex '[A-Za-z0-9]{32}.png')) on $left.NetworkMessageId == $right.NetworkMessageId
+| project Timestamp, ReportId, SenderFromAddress, RecipientEmailAddress, FileName, Subject, NetworkMessageId
