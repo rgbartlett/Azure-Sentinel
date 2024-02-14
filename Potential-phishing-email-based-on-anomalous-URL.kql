@@ -1,0 +1,34 @@
+// Potential phishing email based on anomalous URL
+// Looks for emails to multiple recipients with previously unused URLs which are known to be used in phishing attacks
+// Define minimum recipients, 5 was based on Shropshire WT phishing email
+let MinRecipients = 5;
+// URLs known to be used in phishing
+let PhishingLinkHost = dynamic(["t.ly", "r20.rs6.net", "ct.sendgrid.net", "clicktime.symantec.com", "t.indeed.com", "slickdeals.net", "www.linkedin.com/slink", "my.sharepoint.com", "bing.com/ck/a", "google.com/amp/s/", "www.dropbox.com/l/scl/", "indd.adobe.com", "www.canva.com/design/", "000webhostapp.com/", "firebaseapp.com/", "app.box.com/notes", "webcindario.com/", ".pl/", ".ru/"]);
+// Define links previous received to exclude from final results
+let PrevLinks = (EmailEvents
+    | join kind=inner EmailUrlInfo on $left.NetworkMessageId == $right.NetworkMessageId
+    | where TimeGenerated between (ago(30d) .. ago(1h))
+        and EmailDirection == "Inbound"
+        and UrlCount > 0
+        and DeliveryAction == "Delivered"
+    | distinct UrlDomain);
+// Build list of emails sent to more than threshold recipients
+let MassEmail = (EmailEvents
+    | where TimeGenerated > ago(1h)
+    | summarize MessageCount = count() by NetworkMessageId
+    | where MessageCount >= MinRecipients
+    | distinct NetworkMessageId);
+EmailEvents
+| join kind=inner EmailUrlInfo on $left.NetworkMessageId == $right.NetworkMessageId
+| where TimeGenerated > ago(1h)
+    and EmailDirection == "Inbound"
+    and DeliveryAction == "Delivered"
+    and Url has_any (PhishingLinkHost)
+    and UrlDomain !in (PrevLinks)
+    and NetworkMessageId in~ (MassEmail)
+| project
+    TimeGenerated,
+    SenderFromAddress,
+    RecipientEmailAddress,
+    Subject,
+    Url

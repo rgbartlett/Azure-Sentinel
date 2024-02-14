@@ -1,0 +1,5 @@
+//Potential malicious use of Graph API privileged role (testing)
+//Looks for use of Roles AppRoleAssignment.ReadWrite.All in MicrosoftGraphActivityLogs
+MicrosoftGraphActivityLogs
+| where TimeGenerated > ago(1h) and Roles == "AppRoleAssignment.ReadWrite.All"
+| project TimeGenerated, IPAddress, UserAgent, RequestUri, Roles, AppId, ServicePrincipalId

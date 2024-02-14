@@ -1,0 +1,12 @@
+// Successful login from suspected attacker infrastructure
+// Looks for successful logins from networks with an Autonomous System Number from which we’ve only ever seen invalid logins from in the last 14 days, and no successful logins. That means it has probably been used to try and password spray or brute force credentials and has never been used by a legitimate user.
+let Time = 14d;
+let GoodASN = (SigninLogs
+| where TimeGenerated > ago(Time) and ResultType == "0"
+| distinct AutonomousSystemNumber);
+let BadASN = (SigninLogs
+| where TimeGenerated > ago(Time) and ResultType == "50126" and AutonomousSystemNumber !in (GoodASN)
+| distinct AutonomousSystemNumber);
+SigninLogs
+| where TimeGenerated > ago(1h) and AutonomousSystemNumber in (BadASN) and ResultType == "0"
+| project TimeGenerated, UserPrincipalName, IPAddress, AutonomousSystemNumber, Location, AppDisplayName, UserId
