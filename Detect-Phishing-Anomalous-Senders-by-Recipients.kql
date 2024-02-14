@@ -1,26 +1,41 @@
+// Potential phishing emails based on URL and anomalous sender
+// Highlights potential phishing emails based on anomalous sender, multiple recipients and URL patterns used in current phishing emails.
 // Define phishing links here based on current threat information
-let PhishingLinkHost = dynamic(["clicktime.symantec.com","t.indeed.com","slickdeals.net","www.linkedin.com/slink","my.sharepoint.com","bing.com/ck/a","google.com/amp/s/","www.dropbox.com/l/scl/","indd.adobe.com","www.canva.com/design/","000webhostapp.com/","firebaseapp.com/","app.box.com/notes","webcindario.com/",".pl/",".ru/"]);
-// Add any links which cause false positives, typically Canva Urls which I've redcated from this query
-let AllowedLinks = dynamic(["https://www.canva.com/design"]);
+let PhishingLinkHost = dynamic(["t.ly","r20.rs6.net", "ct.sendgrid.net", "clicktime.symantec.com", "t.indeed.com", "slickdeals.net", "www.linkedin.com/slink", "my.sharepoint.com", "bing.com/ck/a", "google.com/amp/s/", "www.dropbox.com/l/scl/", "indd.adobe.com", "www.canva.com/design/", "000webhostapp.com/", "firebaseapp.com/", "app.box.com/notes", "webcindario.com/", ".pl/", ".ru/"]);
+let AllowedLinks = dynamic([insert URLs in here to avoid legitimate Canva links or others being caught as false positives]);
 // Define minimum recipients, 5 was based on previous phishing emails
 let MinRecipients = 5;
 // Build list of senders who have previously sent emails with links
 let LinkSenders = (EmailEvents
-| where UrlCount > 0 and EmailDirection == "Inbound"
-| where TimeGenerated between (ago(30d)..ago(1h)) and DeliveryAction == "Delivered"
-| distinct SenderFromAddress);
+    | where UrlCount > 0 and EmailDirection == "Inbound"
+    | where TimeGenerated between (ago(30d) .. ago(1h)) and DeliveryAction == "Delivered"
+    | distinct SenderFromAddress);
 // Build list of emails sent to more than threshold recipients
 let MassEmail = (EmailEvents
-| where TimeGenerated > ago(1h)
-| summarize MessageCount = count() by NetworkMessageId
-| where MessageCount >= MinRecipients
-| distinct NetworkMessageId);
+    | where TimeGenerated > ago(1h)
+    | summarize MessageCount = count() by NetworkMessageId
+    | where MessageCount >= MinRecipients
+    | distinct NetworkMessageId);
 // Find inbound emails with URL's in the PhishingLinkHost list from a new sender
 let FoundEmails = (EmailEvents
-| where TimeGenerated > ago(1h) and UrlCount > 0 and EmailDirection == "Inbound" and DeliveryAction == "Delivered"
-| join EmailUrlInfo on NetworkMessageId
-| where Url has_any (PhishingLinkHost) and SenderFromAddress !in~ (LinkSenders) and NetworkMessageId in~ (MassEmail) and Url !contains (AllowedLinks)
-| distinct NetworkMessageId);
+    | where TimeGenerated > ago(1h)
+        and UrlCount > 0
+        and EmailDirection == "Inbound"
+        and DeliveryAction == "Delivered"
+    | join EmailUrlInfo on NetworkMessageId
+    | where Url has_any (PhishingLinkHost)
+        and SenderFromAddress !in~ (LinkSenders)
+        and NetworkMessageId in~ (MassEmail)
+        and Url !contains (AllowedLinks)
+    | distinct NetworkMessageId);
+let M365SURL = "https://security.microsoft.com/emailentity?f=summary";
 EmailEvents
 | where NetworkMessageId in~ (FoundEmails)
-| distinct TimeGenerated, RecipientEmailAddress, SenderFromAddress, Subject, NetworkMessageId
+| extend LinkToEmail = strcat(M365SURL, "&startTime=", TimeGenerated, "&endTime=", TimeGenerated, "&id=", NetworkMessageId, "&recipient=", RecipientEmailAddress, "&tid=06976414-1a5a-4334-ac04-e7ab43442d36")
+| distinct
+    TimeGenerated,
+    RecipientEmailAddress,
+    SenderFromAddress,
+    Subject,
+    LinkToEmail,
+    NetworkMessageId
