@@ -1,12 +1,16 @@
 // Successful login from suspected attacker infrastructure
 // Looks for successful logins from networks with an Autonomous System Number from which we’ve only ever seen invalid logins from in the last 14 days, and no successful logins. That means it has probably been used to try and password spray or brute force credentials and has never been used by a legitimate user.
 let Time = 14d;
+// Define GoodASN as ASNs where we've had successful logins in the last 14 days up to 1 hour ago
 let GoodASN = (SigninLogs
-| where TimeGenerated > ago(Time) and ResultType == "0"
+| where TimeGenerated between (ago(Time) .. ago(1h)) and ResultType == "0"
 | distinct AutonomousSystemNumber);
+// Define BadASN as ASNs where we've seen failed logins (incorrect password) and no successful logins
+// Could expand this to include 50053 (blocked by Microsoft) and MFA denied auth results
 let BadASN = (SigninLogs
 | where TimeGenerated > ago(Time) and ResultType == "50126" and AutonomousSystemNumber !in (GoodASN)
 | distinct AutonomousSystemNumber);
+// Look for successful logins from ASNs which we've previously only seen failed logins
 SigninLogs
 | where TimeGenerated > ago(1h) and AutonomousSystemNumber in (BadASN) and ResultType == "0"
 | project TimeGenerated, UserPrincipalName, IPAddress, AutonomousSystemNumber, Location, AppDisplayName, UserId
