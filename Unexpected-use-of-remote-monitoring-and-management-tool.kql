@@ -1,3 +1,5 @@
+// Build a history of previously used remote management and monitoring tools. Set to 90 days to pickup occaisional sysadmin events.
+// To avoid false/benign positives comment out the relevant line for your tool, or refine the KQL to detect anomalies from your normal use of the tool
 let RMMHistory = (DeviceProcessEvents
     | where TimeGenerated between (ago(90d)..ago(1h)) and FileName has_any (
         "acticalRMM",
@@ -28,7 +30,7 @@ let RMMHistory = (DeviceProcessEvents
         "Get2",
         "getandgo",
         "GetASRSettings.exe",
-        //  "GoToAssist",
+        "GoToAssist",
         "Intelliadmin",
         "ir_agent.exe",
         "klnagent.exe",
@@ -123,7 +125,7 @@ DeviceProcessEvents
     "Get2",
     "getandgo",
     "GetASRSettings.exe",
-    //  "GoToAssist",
+    "GoToAssist",
     "Intelliadmin",
     "ir_agent.exe",
     "klnagent.exe",
